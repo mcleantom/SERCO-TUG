@@ -7,13 +7,16 @@ Created on Thu Apr  8 10:10:44 2021
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+# from mpl_toolkits.basemap import Basemap
 
+engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 
 def read_csv(filepath):
     df = pd.read_csv(filepath, usecols=["imei", "dataloggertime", "longitude",
                                         "latitude", "speedoverground",
                                         "revolutions", "enginetorque",
-                                        "fuelrate", "motor_id", "percentload"])
+                                        "fuelrate", "bus_id", "percentload"])
     df.dropna(subset = ["imei"])
     df["dataloggertime"] = pd.to_datetime(df["dataloggertime"])
     df = df.sort_values(by=["dataloggertime"])
@@ -28,7 +31,7 @@ def read_csv(filepath):
 
 
 def split_engines(df):
-    return dict(tuple(df.groupby('motor_id')))
+    return dict(tuple(df.groupby('bus_id')))
 
 
 def split_days(df):
@@ -70,9 +73,51 @@ def calc_power(df):
 
 
 def sum_engine_powers(engines):
-    combined = engines[203].join(engines[204], how="outer", rsuffix="_2")
+    combined = engines[1].join(engines[2], how="outer", rsuffix="_2")
+    combined["total_power"] = combined["power"] + combined["power_2"]
+    combined["ave_rpm"] = (combined["revolutions"] + combined["revolutions_2"])/2
+    return combined
+
+
+def plot_power_vs_rpm(df):
+    fig, ax = plt.subplots()
+    cols = engine_curves.columns[1:]
+    for col in cols:
+        plt.plot(engine_curves["RPM"], engine_curves[col], label="Engine Power "+str(col)+"%")
+    
+    ax.plot(df["revolutions"], df["total_power"], 'o', markersize=0.5, color="blue")
+    ax.set_xlim(600, 1600)
+    ax.set_ylim(0, 2500)
+    ax.set_xlabel("Engine RPM")
+    ax.set_ylabel("Total Power [kW]")
+    ax.legend(loc="upper left")
+    ax.grid()
+
+
+def plot_power_vs_sog(df):
+    fig, ax = plt.subplots()
+    # cols = engine_curves.columns[1:]
+    # for col in cols
+    
+    ax.plot(df["speedoverground"], df["total_power"], 'o', markersize=0.5, color="blue")
+    ax.set_xlim(0, 7)
+    ax.set_ylim(0, 2500)
+    ax.set_xlabel("SOG [kts]")
+    ax.set_ylabel("Total Power [kW]")
+    ax.legend(loc="upper left")
+
+# def draw_map(df):
+    
+#     lat_mid = df["lateral"].mean()
+#     long_mean = df["longitudinal"].mean()
+#     width = df["lateral"].max()-df["lateral"].min()
+#     height = df["longitudinal"].max()-df["longitudinal"].min()
+    
+#     m = Basemap(width=width, height=height, projection='lcc', resolution='c',
+#                 lat_1 = lat_mid-width/2, lat_2 = lat_mid-width/2,
+#                 lon)
 
 file = "Data\engine_data_week_8.csv"
 data, engines = read_csv(file)
-
+combined = sum_engine_powers(engines)
 # engines = split_engines(data)
