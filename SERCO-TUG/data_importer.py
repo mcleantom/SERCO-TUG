@@ -157,6 +157,35 @@ def plot_day(df):
     ax2.set_ylim([0, 10])
 
 
+def split_trips(df):
+    g = (df.index.to_series().diff().dt.seconds > 1).cumsum()
+    return dict(tuple(df.groupby(g)))
+
+
+def plot_trips(df):
+    
+    start = df.index[0].to_pydatetime().date()
+    end = start# + datetime.timedelta(days=1)
+    start = datetime.datetime(start.year, start.month, start.day, 6)
+    end = datetime.datetime(end.year, end.month, end.day, 20)
+    
+    fig, ax1 = plt.subplots(dpi=512)
+    ax1.set_ylabel("Total Power [kW], RPM")
+    ax1.set_xlim([start, end])
+    
+    xticks = pd.date_range(start, end, freq='H')
+    ax1.set_xticklabels([x.strftime('%H') for x in xticks])
+    ax1.xaxis.set_tick_params(rotation=00)
+    
+    trips = split_trips(df)
+    for trip in trips:
+        trips[trip]["ave_rpm"].plot(ax=ax1, x_compat=True, label="Trip " + str(trip))
+    
+    ax1.grid()
+    ax1.set_xlabel("Hour of the day [hrs]")
+    ax1.set_ylim([0, 2500])
+    ax1.legend()
+    
 file = "Data\engine_data_2021_02.csv"
 data, engines = read_csv(file)
 combined = sum_engine_powers(engines)
