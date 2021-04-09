@@ -10,7 +10,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime
-# from mpl_toolkits.basemap import Basemap
 
 engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 
@@ -128,15 +127,10 @@ def plot_day(df):
     df["total_power"].plot(ax=ax1, x_compat=True, color="black", label="Total Power", linewidth=0.8)
     df["ave_rpm"].plot(ax=ax1, x_compat=True, color="blue", label="RPM", linewidth=0.8)
 
-    # ax1.plot(df.index, df["total_power"], label="Total Power", color="black", linewidth=0.5)
-    # ax1.plot(df.index, df["ave_rpm"], label="RPM", color="blue", linewidth=0.5)
     ax1.set_xlim([start, end])
     ax1.grid()
     ax1.legend(loc="upper left")
-    # hours = mdates.HourLocator(interval = 1)
-    # h_fmt = mdates.DateFormatter('%H:%M:%S')
-    # ax1.xaxis.set_major_locator(hours)
-    
+
     xticks = pd.date_range(start, end, freq='H')
     ax1.set_xticklabels([x.strftime('%H') for x in xticks])
     ax1.xaxis.set_tick_params(rotation=00)
@@ -146,11 +140,10 @@ def plot_day(df):
     
     df[df["speedoverground"]>0]["speedoverground"].plot(ax=ax2, x_compat=True, color="red", label="SOG", linewidth=0.8)
     
-    # ax2.plot(df[df["speedoverground"]>0].index, df[df["speedoverground"]>0]["speedoverground"], label="SOG", color="red", linewidth=0.5)
     ax2.legend(loc="upper right")
     
     ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     
     ax1.set_xlabel("Hour of the day [hrs]")
     ax1.set_ylim([0, 2500])
@@ -159,7 +152,10 @@ def plot_day(df):
 
 def split_trips(df):
     g = (df.index.to_series().diff().dt.seconds > 1).cumsum()
-    return dict(tuple(df.groupby(g)))
+    trips = dict(tuple(df.groupby(g)))
+    for trip in trips:
+        trips[trip] = trips[trip][trips[trip]["imei"].notna()]
+    return trips
 
 
 def plot_trips(df):
@@ -173,13 +169,15 @@ def plot_trips(df):
     ax1.set_ylabel("Total Power [kW], RPM")
     ax1.set_xlim([start, end])
     
-    xticks = pd.date_range(start, end, freq='H')
-    ax1.set_xticklabels([x.strftime('%H') for x in xticks])
-    ax1.xaxis.set_tick_params(rotation=00)
-    
     trips = split_trips(df)
     for trip in trips:
         trips[trip]["ave_rpm"].plot(ax=ax1, x_compat=True, label="Trip " + str(trip))
+
+    xticks = pd.date_range(start, end, freq='H')
+    ax1.set_xticklabels([x.strftime('%H') for x in xticks])
+    ax1.xaxis.set_tick_params(rotation=00)
+    ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     
     ax1.grid()
     ax1.set_xlabel("Hour of the day [hrs]")
