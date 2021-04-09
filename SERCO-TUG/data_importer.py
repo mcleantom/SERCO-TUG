@@ -202,9 +202,28 @@ def analyse_trips(df):
             results["Trip " + str(i)] = trip_result
             
     results = pd.DataFrame.from_dict(results).T
-    results["time_to_charge"] = results["start_time"] - results["stop_time"].shift(1)
+    results["time_to_charge"] = (results["start_time"] - results["stop_time"].shift(1)).fillna(pd.Timedelta(seconds=0))
     return results
 
+
+def plot_charge_time_vs_energy(df):
+    
+    fig, ax1 = plt.subplots(dpi=512)
+    
+    # start = datetime.timedelta(hours=0)
+    # end = datetime.timedelta(hours=32)
+
+    charge_time = df["time_to_charge"]/datetime.timedelta(hours=1)
+    days, hours = divmod(charge_time, 24)
+    altered_times = 24*days + hours
+
+    # mask = df["time_to_charge"] > 0
+    ax1.plot(altered_times, df["energy_used"], 'o', color="blue")
+    ax1.set_xlabel("Time to Charge per day [hours]")
+    ax1.set_ylabel("Energy Used per Trip [kWh]")
+    ax1.set_xlim([0, 32])
+    ax1.set_ylim([0, 800])
+    ax1.grid()
 
 file = "Data\engine_data_2021_02.csv"
 data, engines = read_csv(file)
@@ -216,3 +235,7 @@ days = split_days(combined)
 for day in days:
     plot_day(days[day])
     plot_trips(days[day])
+
+trips = split_trips(combined)
+trip_results = analyse_trips(trips)
+plot_charge_time_vs_energy(trip_results)
