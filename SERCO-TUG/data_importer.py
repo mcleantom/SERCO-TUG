@@ -80,6 +80,7 @@ def sum_engine_powers(engines):
     combined["total_power"] = combined["power"] + combined["power_2"]
     combined["ave_rpm"] = (combined["revolutions"] + combined["revolutions_2"])/2
     combined["speedoverground"] = combined["speedoverground"].replace(to_replace=0, method='ffill')
+    combined["total_fuel_rate"] = combined["fuelrate"] + combined["fuelrate_2"]
     return combined
 
 
@@ -183,7 +184,32 @@ def plot_trips(df):
     ax1.set_xlabel("Hour of the day [hrs]")
     ax1.set_ylim([0, 2500])
     ax1.legend()
+
+
+def analyse_trips(df):
     
+    results = {}
+
+    for i in df:
+        print(i)
+        trip = df[i]
+        
+        if len(trip) > 0:
+            print("good")
+            trip_result = {'start_time': trip.index[0],
+                           'stop_time': trip.index[-1],
+                           'duration': trip.index[-1] - trip.index[0],
+                           'energy_used': trip["total_power"].sum()
+                           }
+            print(trip_result)
+            results["Trip " + str(i)] = trip_result
+            
+    results = pd.DataFrame.from_dict(results).T
+    results["time_to_charge"] = results["start_time"] - results["stop_time"].shift(1)
+    return results
+        
+
+
 file = "Data\engine_data_2021_02.csv"
 data, engines = read_csv(file)
 combined = sum_engine_powers(engines)
@@ -193,3 +219,4 @@ days = split_days(combined)
 
 for day in days:
     plot_day(days[day])
+    plot_trips(days[day])
