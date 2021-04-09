@@ -191,23 +191,19 @@ def analyse_trips(df):
     results = {}
 
     for i in df:
-        print(i)
         trip = df[i]
         
         if len(trip) > 0:
-            print("good")
             trip_result = {'start_time': trip.index[0],
                            'stop_time': trip.index[-1],
                            'duration': trip.index[-1] - trip.index[0],
-                           'energy_used': trip["total_power"].sum()
+                           'energy_used': (trip["total_power"].sum())/3600
                            }
-            print(trip_result)
             results["Trip " + str(i)] = trip_result
             
     results = pd.DataFrame.from_dict(results).T
     results["time_to_charge"] = results["start_time"] - results["stop_time"].shift(1)
     return results
-        
 
 
 file = "Data\engine_data_2021_02.csv"
