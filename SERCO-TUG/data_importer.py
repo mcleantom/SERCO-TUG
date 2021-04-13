@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime
+from openpyxl.styles import Alignment
 
 engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 
@@ -344,19 +345,33 @@ def save_to_excel(df, day_df):
         df[date_col] = df[date_col].dt.tz_localize(None)
     formatted_df = formatted_table(df)
     path = "results.xlsx"
-    last_row = 2
+    last_row = 1
 
-    with pd.ExcelWriter(path, engine="ExcelWriter") as writer:
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
         workbook = writer.book
         df.to_excel(writer, sheet_name="raw_data")
         formatted_df.to_excel(writer, sheet_name="formatted_table")
         worksheet = writer.sheets["formatted_table"]
         for row in day_df.itertuples():
+            # left_cell = worksheet.cell(column=8, row=last_row+1)
+            # right_cell = worksheet.cell(column=9, row=last_row+1)
+            # left_cell.value = row[1]
+            # right_cell.value = row[2]
+            worksheet.cell(column=8, row=last_row+1, value=row[1])
+            worksheet.cell(column=9, row=last_row+1, value=row[2])
             # worksheet.cell(row=row[4], column=string_to_col_num("H")).value = row[1]
             # worksheet.cell(row=row[4], column=string_to_col_num("I")).value = row[2]
-            worksheet.merge_range(last_row+1, row[4], 8, 8, row[1])
-            worksheet.merge_range(last_row+1, row[4], 9, 9, row[2])
-
+            # worksheet.merge_range(last_row+1, row[4], 8, 8, row[1])
+            # worksheet.merge_range(last_row+1, row[4], 9, 9, row[2])
+            worksheet.merge_cells(start_row=last_row+1, start_column=2, end_row=row[4], end_column=2)
+            worksheet.merge_cells(start_row=last_row+1, start_column=8, end_row = row[4], end_column = 8)
+            worksheet.merge_cells(start_row=last_row+1, start_column=9, end_row=row[4], end_column=9)
+            
+            last_row = row[4]
+        for col in 'ABCDEFJHI':
+            active_col = worksheet.column_dimensions[col]
+            active_col.alignment = Alignment(horizontal="center", vertical="center")
+        
 
 file = "Data\engine_data_2021-02.csv"
 data, engines = read_csv(file)
