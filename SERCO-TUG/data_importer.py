@@ -373,6 +373,12 @@ def save_to_excel(df, day_df):
             active_col.alignment = Alignment(horizontal="center", vertical="center")
         
 
+def plot_weeks(df):
+    weeks = df.groupby(df["start_time"].dt.week)
+    for _, week in weeks:
+        week.groupby(week["start_time"].dt.day)[["duration_idle", "duration_at_power"]].sum().plot.bar(stacked=True)
+        
+
 file = "Data\engine_data_2021-02.csv"
 data, engines = read_csv(file)
 combined = sum_engine_powers(engines)
