@@ -10,16 +10,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime
+from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
 
 engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 
 
-def read_csv(filepath):
-    df = pd.read_csv(filepath, usecols=["imei", "dataloggertime", "longitude",
-                                        "latitude", "speedoverground",
-                                        "revolutions", "enginetorque",
-                                        "fuelrate", "bus_id", "percentload"])
+def read_csv(filepaths):
+    
+    dfs = []
+    
+    for filepath in filepaths:
+        df = pd.read_csv(filepath, usecols=["imei", "dataloggertime", "longitude",
+                                            "latitude", "speedoverground",
+                                            "revolutions", "enginetorque",
+                                            "fuelrate", "bus_id", "percentload"])
+        dfs.append(df)
+    
+    df = pd.concat(dfs)
     df.dropna(subset = ["imei"])
     df["dataloggertime"] = pd.to_datetime(df["dataloggertime"])
     df = df.sort_values(by=["dataloggertime"])
@@ -57,18 +65,24 @@ def calc_torque(df):
 
     mask = df["revolutions"] < 1025
 
-    rpm = df.loc[mask, "revolutions"]
-    df.loc[mask, "torque"] = (0.00001698*rpm**3 -
-                              0.0273*rpm**2 +
-                              14.99*rpm + 1276)
+    # rpm = df.loc[mask, "revolutions"]
+    # df.loc[mask, "torque"] = (0.00001698*rpm**3 -
+    #                           0.0273*rpm**2 +
+    #                           14.99*rpm + 1276)
 
-    mask = df["revolutions"] >= 1025
+    # mask = df["revolutions"] >= 1025
 
-    rpm = df.loc[mask, "revolutions"]
-    df.loc[mask, "torque"] = (-0.0000005388274*rpm**4 +
-                             +0.003072432*rpm**3 -
-                             6.551486*rpm**2 +
-                             6186.143*rpm - 2171670)
+    # rpm = df.loc[mask, "revolutions"]
+    # df.loc[mask, "torque"] = (-0.0000005388274*rpm**4 +
+    #                          +0.003072432*rpm**3 -
+    #                          6.551486*rpm**2 +
+    #                          6186.143*rpm - 2171670)
+    x = [1600,1500,1400,1300,1200,1150,1100,1000,900,800,650,400]
+    y = [7789,8308,8901,9400,9486,8400,7084,5854,5305,4381,4114,4000]
+    f = interp1d(x, y, kind="linear", bounds_error=False, fill_value="extrapolate")
+    df["torque"] = f(df["revolutions"])
+    # df["torque"] = 
+    
     return df
 
 
@@ -94,8 +108,8 @@ def plot_power_vs_rpm(df):
         plt.plot(engine_curves["RPM"], engine_curves[col], label="Engine Power "+str(col)+"%")
    
 
-    ax.set_xlim(600, 1600)
-    ax.set_ylim(0, 2500)
+    ax.set_xlim(left=600)#(600, 1600)
+    ax.set_ylim(bottom=0)#0, 2500)
     ax.set_xlabel("Engine RPM")
     ax.set_ylabel("Total Power [kW]")
     ax.legend(loc="upper left")
@@ -113,8 +127,8 @@ def plot_power_vs_sog(df):
     for col in cols:
         ax.plot([0, 7], [engine_curves[col][0]]*2, label="Engine Power "+str(col)+"%")
 
-    ax.set_xlim(0, 7)
-    ax.set_ylim(0, 2500)
+    ax.set_xlim(left=0)#(0, 7)
+    ax.set_ylim(bottom=0)#(0, 2500)
     ax.set_xlabel("SOG [kts]")
     ax.set_ylabel("Total Power [kW]")
     ax.legend(loc="upper left")
@@ -154,8 +168,8 @@ def plot_day(df):
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     
     ax1.set_xlabel("Hour of the day [hrs]")
-    ax1.set_ylim([0, 2500])
-    ax2.set_ylim([0, 10])
+    ax1.set_ylim(left=0)#(0, 2500])
+    ax2.set_ylim(left=0)#[0, 10])
 
 
 def split_trips(df):
@@ -190,7 +204,7 @@ def plot_trips(df):
     
     ax1.grid()
     ax1.set_xlabel("Hour of the day [hrs]")
-    ax1.set_ylim([0, 2500])
+    ax1.set_ylim(bottom=0)#[0, 2500])
     ax1.legend()
 
 
@@ -236,6 +250,10 @@ def analyse_trips(df):
     # results["total_fuel_used"] = (results["total_fuel_rate"]/3600).sum()
     # mask = results["total_power"]<=5
     # results["fuel_used_at_power"] = (results[mask]["total_fuel_rate"]/3600).sum()
+    cols = ['duration', 'energy_used', 'total_fuel',
+       'fuel_at_power', 'fuel_idle', 'duration_at_power', 'duration_idle',
+       'time_to_charge']
+    results[cols] = results[cols].astype(float)
     return results
 
 
@@ -271,8 +289,8 @@ def plot_charge_time_vs_energy(df):
     # ax1.plot(altered_times, df["energy_used"], 'o', color="blue")
     ax1.set_xlabel("Time to Charge per day [hours]")
     ax1.set_ylabel("Energy Used per Trip [kWh]")
-    ax1.set_xlim([0, 32])
-    ax1.set_ylim([0, 800])
+    ax1.set_xlim(left=0)#[0, 32])
+    ax1.set_ylim(bottom=0)#[0, 800])
     ax1.grid()
     ax1.legend(loc="upper right")
     fig.tight_layout()
@@ -284,8 +302,8 @@ def plot_energy_used_vs_time_to_charge(df):
     fig, ax1 = plt.subplots(dpi=512, figsize=(6.48, 2.95))
     mask = df["total_charge_time"] != 0
     ax1.plot(df[mask]["total_charge_time"], df[mask]["total_energy"], "o", color="blue")
-    ax1.set_xlim([0, 32])
-    ax1.set_ylim([0, 1200])
+    ax1.set_xlim(left=0)#[0, 32])
+    ax1.set_ylim(bottom=0)#[0, 1200])
     ax1.set_xlabel("Time to Charge per day [hours]")
     ax1.set_ylabel("Energy Used per day [kWh]")
     ax1.grid()
@@ -373,14 +391,91 @@ def save_to_excel(df, day_df):
             active_col.alignment = Alignment(horizontal="center", vertical="center")
         
 
+def plot_days(df):
+    df = df.copy()
+    wrk = df.resample('D', on='start_time').sum()
+    dayNo = wrk.index.size
+    print(dayNo)
+    
+    start_date = wrk.index.date.min().isocalendar()
+    start_week = start_date[1]
+    start_year = start_date[0]
+    d = str(start_year) +"-W"+str(start_week)
+    resample_start = datetime.datetime.strptime(d + "-1", "%Y-W%W-%w")
+    wrk = wrk.reindex(pd.date_range(start = resample_start,
+                                    periods = dayNo - (dayNo % -7)), fill_value=0)
+
+    wrk["week"] = wrk.index.isocalendar().week
+    wrk.index = wrk.index.astype(str)
+    for week, grp in wrk.groupby('week'):
+        fig, ax = plt.subplots(figsize=(6.48, 2.95), dpi=512)
+        grp.iloc[:, :2].plot.bar(ax=ax, stacked=True, color=["tab:orange", "tab:grey"])
+
 def plot_weeks(df):
-    weeks = df.groupby(df["start_time"].dt.week)
-    for _, week in weeks:
-        week.groupby(week["start_time"].dt.day)[["duration_idle", "duration_at_power"]].sum().plot.bar(stacked=True)
+    df = df.copy()
+    wrk = df.resample('W', on='start_time').sum()
+    dayNo = wrk.index.size
+    print(dayNo)
+    
+    start_date = wrk.index.date.min().isocalendar()
+    start_week = start_date[1]
+    start_year = start_date[0]
+    d = str(start_year) +"-W"+str(start_week)
+    resample_start = datetime.datetime.strptime(d + "-1", "%Y-W%W-%w")
+    wrk.index = wrk.index - datetime.timedelta(days=6)
+    num_weeks = (wrk.index.max()-wrk.index.min()).days/7 + 1
+    wrk = wrk.reindex(pd.date_range(start = resample_start,
+                                    periods = num_weeks,
+                                    freq="W")-datetime.timedelta(days=6), fill_value=0)
+
+    # wrk["week"] = wrk.index.isocalendar().week
+    # wrk.index = wrk.index.astype(str)
+    
+    fig, ax = plt.subplots(figsize=(6.48, 2.95), dpi=512)
+    wrk.plot.bar(ax=ax, stacked=True, color=["tab:orange", "tab:grey"])
+    ax.set_xticklabels(wrk.index.strftime("%Y-%M"))
+
+def plot_months(df):
+    df = df.copy()
+    wrk = df.resample('M', on='start_time').sum()
+    dayNo = wrk.index.size
+    print(dayNo)
+    
+    start_date = wrk.index.date.min().isocalendar()
+    start_week = start_date[1]
+    start_year = start_date[0]
+    d = str(start_year) +"-W"+str(start_week)
+    resample_start = datetime.datetime.strptime(d + "-1", "%Y-W%W-%w")
+    wrk.index = [x.replace(day=1) for x in wrk.index]
+    date_range = pd.date_range(start=wrk.index.min(), periods=6, freq="M")
+    date_range = [x.replace(day=1) for x in date_range]
+    wrk = wrk.reindex(date_range, fill_value=0)
+    
+    fig, ax = plt.subplots(figsize=(6.48, 2.95), dpi=512)
+    wrk.plot.bar(ax=ax, stacked=True, color=["tab:orange", "tab:grey"])
+    ax.set_xticklabels(wrk.index.strftime("%Y-%b"))
         
 
-file = "Data\engine_data_2021-02.csv"
-data, engines = read_csv(file)
+    # return wrk
+    # min_week = wrk.index.date.min().isocalendar()[1]
+    
+    # wrk = 
+    # weeks = df.groupby(df["start_time"].dt.week)
+    # for _, week in weeks:
+    #     week.groupby(week["start_time"].dt.day)[["duration_idle", "duration_at_power"]].sum().plot.bar(stacked=True)
+    # return week
+        
+
+# file = "Data\engine_data_2021-02.csv"
+# data_1, engines_1 = read_csv(file)
+# file = "Data\engine_data_2021-03.csv"
+# data_2, engines_2 = read_csv(file)
+
+# data = pd.concat([data_1, data_2])
+# engines = pd.concat([engines_1, engines_2])
+
+data, engines = read_csv(["Data\engine_data_2021-02.csv", "Data\engine_data_2021-03.csv"])
+
 combined = sum_engine_powers(engines)
 plot_power_vs_rpm(combined)
 plot_power_vs_sog(combined)
@@ -392,3 +487,4 @@ plot_charge_time_vs_energy(trip_results)
 day_results = analyse_days(trip_results)
 plot_energy_used_vs_time_to_charge(day_results)
 save_to_excel(trip_results, day_results)
+temp = plot_weeks(trip_results[["start_time", "duration_idle", "duration_at_power"]])
