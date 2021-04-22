@@ -101,7 +101,7 @@ def sum_engine_powers(engines):
     return combined
 
 
-def plot_power_vs_rpm(df):
+def plot_power_vs_rpm(df, title=""):
     fig, ax = plt.subplots(dpi=512, figsize=(6.51, 3.93)) 
     ax.plot(df["ave_rpm"], df["total_power"], 'o', markersize=0.5, color="blue")
     cols = engine_curves.columns[1:]
@@ -116,10 +116,12 @@ def plot_power_vs_rpm(df):
     ax.legend(loc="upper left")
     ax.grid()
     fig.tight_layout()
-    fig.savefig("power_vs_rpm.png")
+    if title:
+        title += "_"
+    fig.savefig("Figures/"+title+"power_vs_rpm.png")
 
 
-def plot_power_vs_sog(df):
+def plot_power_vs_sog(df, title=""):
     fig, ax = plt.subplots(dpi=512, figsize=(6.51, 3.93))
     
     ax.plot(df["speedoverground"], df["total_power"], 'o', markersize=0.5, color="blue")
@@ -135,7 +137,9 @@ def plot_power_vs_sog(df):
     ax.legend(loc="upper left")
     ax.grid()
     fig.tight_layout()
-    fig.savefig("power_vs_sog.png")
+    if title:
+        title += "_"
+    fig.savefig("Figures/"+title+"power_vs_sog.png")
 
 
 def plot_day(df):
@@ -259,17 +263,17 @@ def analyse_trips(df):
 
 
 def analyse_days(df):
-    days = dict(tuple(df.groupby('date')))
-    
+    # days = dict(tuple(df.groupby('date')))
+    days = df.groupby('date')
     results = {}
-    for i in days:
-        trips = days[i]
-        day_result = {'total_charge_time': trips["time_to_charge"].sum(),
-                      'total_energy': trips["energy_used"].sum(),
-                      'num_trips':len(trips)}
-        results[i] = day_result
+    for i, day in days:
+        day_result = {'total_charge_time': day["time_to_charge"].sum(),
+                      'total_energy': day["energy_used"].sum(),
+                      'num_trips':len(day)}
+        results[day["start_time"].dt.date[0]] = day_result
     
     results = pd.DataFrame.from_dict(results).T
+    results = results.sort_index()
     results["cum_num_trips"] = results["num_trips"].cumsum()+1
 
     return results
@@ -295,7 +299,7 @@ def plot_charge_time_vs_energy(df):
     ax1.grid()
     ax1.legend(loc="upper right")
     fig.tight_layout()
-    fig.savefig("energy_used_vs_charge_time (trips).png")
+    fig.savefig("energy_used_vs_charge_time (trips).svg")
 
 
 def plot_energy_used_vs_time_to_charge(df):
@@ -309,7 +313,7 @@ def plot_energy_used_vs_time_to_charge(df):
     ax1.set_ylabel("Energy Used per day [kWh]")
     ax1.grid()
     fig.tight_layout()
-    fig.savefig("energy_used_vs_charge_time (days).png")
+    fig.savefig("energy_used_vs_charge_time (days).svg")
 
 
 def formatted_table(df):
@@ -358,7 +362,7 @@ def string_to_col_num(string):
     return sum([(26**i)*(ord(c)-64) for i, c in enumerate(string[::-1].upper())])
 
 
-def save_to_excel(df, day_df, month_df):
+def save_to_excel(df, day_df, month_df, month_hist_data):
     date_cols = df.select_dtypes(include=['datetime64[ns, UTC]']).columns
     for date_col in date_cols:
         df[date_col] = df[date_col].dt.tz_localize(None)
@@ -368,9 +372,10 @@ def save_to_excel(df, day_df, month_df):
     last_row = 1
 
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        workbook = writer.book
+        # workbook = writer.book
         df.to_excel(writer, sheet_name="raw_data")
         month_df.to_excel(writer, sheet_name="Monthly Data")
+        month_hist_data.to_excel(writer, sheet_name="Histogram")
         formatted_df.to_excel(writer, sheet_name="formatted_table")
         worksheet = writer.sheets["formatted_table"]
         for row in day_df.itertuples():
@@ -452,10 +457,16 @@ def analyse_months(df):
     wrk.index = [x.replace(day=1) for x in wrk.index]
     date_range = pd.date_range(start=wrk.index.min(), periods=6, freq="M")
     date_range = [x.replace(day=1) for x in date_range]
-    wrk = wrk.reindex(date_range, fill_value=0)
+    wrk = wrk.reindex(date_range, fill_value=np.nan)
     hours_in_month = np.array([calendar.monthrange(x.year, x.month)[1]*24 for x in wrk.index])
     wrk["duration_engine_off"] = hours_in_month - wrk["duration"]
+    wrk["total_co2"] = wrk["total_fuel"] * 2.675994109
+    wrk = wrk[["duration_engine_off", "duration", "duration_idle",
+               "duration_at_power", "fuel_idle", "fuel_at_power", "total_fuel",
+               "total_co2"]]
     wrk.index = wrk.index.date
+    # wrk = wrk.T
+    wrk.loc["total"] = wrk.sum(axis=0)
     return wrk
     
 
@@ -490,13 +501,13 @@ def plot_months(df):
     # return week
 
 
-def calc_histogram_engine_data(df):
+def calc_histogram_engine_data(df, title="count"):
     n, bins = np.histogram(df["total_power"], bins=[5,100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100,2200,2300,2400])
     width = np.diff(bins)
     bins = [str(x) for x in bins]
     bins = [x[0]+"-"+x[1] for x in zip(bins[:-1], bins[1:])]
     n = n/60        
-    return pd.DataFrame(n, index=bins, columns=["count"])
+    return pd.DataFrame(n, index=bins, columns=[title])
 
 
 def plot_histogram_engine_data(df):
@@ -519,6 +530,26 @@ def plot_histogram_engine_data(df):
                 ha='center', va='bottom', fontsize="x-small")
 
 
+def monthly_hist_data(df):
+    hist_data = []
+    months = df.groupby(df.index.month)
+    for i, month in months:
+        hist_data += [calc_histogram_engine_data(month,
+                                                 title=month.index[0].strftime("%Y-%m"))]
+    
+    temp = hist_data[0]
+    for x in hist_data[1:]:
+        temp = temp.join(x)
+    temp["total"] = temp.sum(axis=1)
+    return temp
+
+
+def plot_monthly_power_vs_rpm_and_sog(df):
+    months = df.groupby(df.index.month)
+    for i, month in months:
+        plot_power_vs_rpm(month, title=month.index[0].strftime("%Y-%m"))
+        plot_power_vs_sog(month, title=month.index[0].strftime("%Y-%m"))
+
 # file = "Data\engine_data_2021-02.csv"
 # data_1, engines_1 = read_csv(file)
 # file = "Data\engine_data_2021-03.csv"
@@ -527,11 +558,13 @@ def plot_histogram_engine_data(df):
 # data = pd.concat([data_1, data_2])
 # engines = pd.concat([engines_1, engines_2])
 
-data, engines = read_csv(["Data\engine_data_2021-02.csv", "Data\engine_data_2021-03.csv"])
+data, engines = read_csv(["Data\engine_data_2021-02.csv",
+                          "Data\engine_data_2021-03.csv"])
 
 combined = sum_engine_powers(engines)
-plot_power_vs_rpm(combined)
-plot_power_vs_sog(combined)
+plot_power_vs_rpm(combined, title="all_data")
+plot_power_vs_sog(combined, title="all_data")
+plot_monthly_power_vs_rpm_and_sog(combined)
 days = split_days(combined)
 
 # histogram_data = calc_histogram_engine_data()
@@ -540,7 +573,8 @@ trip_results = analyse_trips(trips)
 plot_charge_time_vs_energy(trip_results)
 day_results = analyse_days(trip_results)
 month_results = analyse_months(trip_results)
+month_hist_data = monthly_hist_data(combined)
 plot_energy_used_vs_time_to_charge(day_results)
-save_to_excel(trip_results, day_results, month_results.T)
+save_to_excel(trip_results, day_results, month_results.T, month_hist_data)
 plot_months(trip_results[["start_time", "duration_idle", "duration_at_power"]])
 plot_months(trip_results[["start_time", "fuel_idle", "fuel_at_power"]])
