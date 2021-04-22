@@ -14,8 +14,17 @@ from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
 import calendar
 
-engine_curves = pd.read_excel("Data/engine_curve.xlsx")
+# =============================================================================
+# INPUTS
+# =============================================================================
 
+engine_curves = pd.read_excel("Data/engine_curve.xlsx")
+csv_files = ["Data\engine_data_2021-02.csv",
+             "Data\engine_data_2021-03.csv"]
+
+# =============================================================================
+# CODE
+# =============================================================================
 
 def read_csv(filepaths):
     
@@ -558,8 +567,7 @@ def plot_monthly_power_vs_rpm_and_sog(df):
 # data = pd.concat([data_1, data_2])
 # engines = pd.concat([engines_1, engines_2])
 
-data, engines = read_csv(["Data\engine_data_2021-02.csv",
-                          "Data\engine_data_2021-03.csv"])
+data, engines = read_csv(csv_files)
 
 combined = sum_engine_powers(engines)
 plot_power_vs_rpm(combined, title="all_data")
