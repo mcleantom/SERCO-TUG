@@ -308,7 +308,7 @@ def plot_charge_time_vs_energy(df):
     ax1.grid()
     ax1.legend(loc="upper right")
     fig.tight_layout()
-    fig.savefig("energy_used_vs_charge_time (trips).svg")
+    fig.savefig("Figures/energy_used_vs_charge_time (trips).svh")
 
 
 def plot_energy_used_vs_time_to_charge(df):
@@ -322,7 +322,7 @@ def plot_energy_used_vs_time_to_charge(df):
     ax1.set_ylabel("Energy Used per day [kWh]")
     ax1.grid()
     fig.tight_layout()
-    fig.savefig("energy_used_vs_charge_time (days).svg")
+    fig.savefig("Figures/energy_used_vs_charge_time (days).svg")
 
 
 def formatted_table(df):
