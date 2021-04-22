@@ -377,7 +377,7 @@ def save_to_excel(df, day_df, month_df, month_hist_data):
         df[date_col] = df[date_col].dt.tz_localize(None)
     
     formatted_df = formatted_table(df)
-    path = "results.xlsx"
+    path = "Results/"+str(datetime.datetime.now()).replace(":","-")+"_results.xlsx"
     last_row = 1
 
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
