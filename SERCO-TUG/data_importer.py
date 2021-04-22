@@ -12,6 +12,7 @@ import matplotlib.dates as mdates
 import datetime
 from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
+import calendar
 
 engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 
@@ -61,9 +62,9 @@ def calc_torque(df):
     """
     Fit the engine RPM to a torque curve
     """
-    df["torque"] = np.nan
+    # df["torque"] = np.nan
 
-    mask = df["revolutions"] < 1025
+    # mask = df["revolutions"] < 1025
 
     # rpm = df.loc[mask, "revolutions"]
     # df.loc[mask, "torque"] = (0.00001698*rpm**3 -
@@ -74,9 +75,9 @@ def calc_torque(df):
 
     # rpm = df.loc[mask, "revolutions"]
     # df.loc[mask, "torque"] = (-0.0000005388274*rpm**4 +
-    #                          +0.003072432*rpm**3 -
-    #                          6.551486*rpm**2 +
-    #                          6186.143*rpm - 2171670)
+    #                           +0.003072432*rpm**3 -
+    #                           6.551486*rpm**2 +
+    #                           6186.143*rpm - 2171670)
     x = [1600,1500,1400,1300,1200,1150,1100,1000,900,800,650,400]
     y = [7789,8308,8901,9400,9486,8400,7084,5854,5305,4381,4114,4000]
     f = interp1d(x, y, kind="linear", bounds_error=False, fill_value="extrapolate")
@@ -357,10 +358,11 @@ def string_to_col_num(string):
     return sum([(26**i)*(ord(c)-64) for i, c in enumerate(string[::-1].upper())])
 
 
-def save_to_excel(df, day_df):
+def save_to_excel(df, day_df, month_df):
     date_cols = df.select_dtypes(include=['datetime64[ns, UTC]']).columns
     for date_col in date_cols:
         df[date_col] = df[date_col].dt.tz_localize(None)
+    
     formatted_df = formatted_table(df)
     path = "results.xlsx"
     last_row = 1
@@ -368,6 +370,7 @@ def save_to_excel(df, day_df):
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         workbook = writer.book
         df.to_excel(writer, sheet_name="raw_data")
+        month_df.to_excel(writer, sheet_name="Monthly Data")
         formatted_df.to_excel(writer, sheet_name="formatted_table")
         worksheet = writer.sheets["formatted_table"]
         for row in day_df.itertuples():
@@ -433,7 +436,28 @@ def plot_weeks(df):
     
     fig, ax = plt.subplots(figsize=(6.48, 2.95), dpi=512)
     wrk.plot.bar(ax=ax, stacked=True, color=["tab:orange", "tab:grey"])
-    ax.set_xticklabels(wrk.index.strftime("%Y-%M"))
+    ax.set_xticklabels(list(wrk.index.strftime("%Y-%b")))
+
+
+def analyse_months(df):
+    cols = ["start_time", 'duration', 'energy_used', 'total_fuel',
+       'fuel_at_power', 'fuel_idle', 'duration_at_power', 'duration_idle',
+       'time_to_charge']
+    df = df[cols].copy()
+    wrk = df.resample('M', on='start_time').sum()
+    start_date = wrk.index.date.min().isocalendar()
+    start_week = start_date[1]
+    start_year = start_date[0]
+    d = str(start_year) +"-W"+str(start_week)
+    wrk.index = [x.replace(day=1) for x in wrk.index]
+    date_range = pd.date_range(start=wrk.index.min(), periods=6, freq="M")
+    date_range = [x.replace(day=1) for x in date_range]
+    wrk = wrk.reindex(date_range, fill_value=0)
+    hours_in_month = np.array([calendar.monthrange(x.year, x.month)[1]*24 for x in wrk.index])
+    wrk["duration_engine_off"] = hours_in_month - wrk["duration"]
+    wrk.index = wrk.index.date
+    return wrk
+    
 
 def plot_months(df):
     df = df.copy()
@@ -464,7 +488,36 @@ def plot_months(df):
     # for _, week in weeks:
     #     week.groupby(week["start_time"].dt.day)[["duration_idle", "duration_at_power"]].sum().plot.bar(stacked=True)
     # return week
-        
+
+
+def calc_histogram_engine_data(df):
+    n, bins = np.histogram(df["total_power"], bins=[5,100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100,2200,2300,2400])
+    width = np.diff(bins)
+    bins = [str(x) for x in bins]
+    bins = [x[0]+"-"+x[1] for x in zip(bins[:-1], bins[1:])]
+    n = n/60        
+    return pd.DataFrame(n, index=bins, columns=["count"])
+
+
+def plot_histogram_engine_data(df):
+    n, bins = np.histogram(df["total_power"], bins=[5,100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100,2200,2300,2400])
+    width = np.diff(bins)
+    bins = [str(x) for x in bins]
+    bins = [x[0]+"-"+x[1] for x in zip(bins[:-1], bins[1:])]
+    n = n/60
+    fig, ax = plt.subplots(dpi=512, figsize=(6.51, 3.93))
+    # ax.grid(True, which="minor")
+    # ax.grid(which="both", zorder=0)
+    # ax.xaxis.set_minor_locator(AutoMinorLocator())
+    rects = ax.bar(bins, n, zorder=3)
+    ax.tick_params(axis='x', rotation=90)
+    # ax.set_ylim(0, 900)
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., height+10,
+                '%d' % int(height),
+                ha='center', va='bottom', fontsize="x-small")
+
 
 # file = "Data\engine_data_2021-02.csv"
 # data_1, engines_1 = read_csv(file)
@@ -481,10 +534,13 @@ plot_power_vs_rpm(combined)
 plot_power_vs_sog(combined)
 days = split_days(combined)
 
+# histogram_data = calc_histogram_engine_data()
 trips = split_trips(combined)
 trip_results = analyse_trips(trips)
 plot_charge_time_vs_energy(trip_results)
 day_results = analyse_days(trip_results)
+month_results = analyse_months(trip_results)
 plot_energy_used_vs_time_to_charge(day_results)
-save_to_excel(trip_results, day_results)
-temp = plot_weeks(trip_results[["start_time", "duration_idle", "duration_at_power"]])
+save_to_excel(trip_results, day_results, month_results.T)
+plot_months(trip_results[["start_time", "duration_idle", "duration_at_power"]])
+plot_months(trip_results[["start_time", "fuel_idle", "fuel_at_power"]])
