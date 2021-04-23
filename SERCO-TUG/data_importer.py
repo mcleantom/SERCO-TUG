@@ -13,6 +13,7 @@ import datetime
 from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
 import calendar
+import seaborn as sns
 
 # =============================================================================
 # INPUTS
@@ -110,9 +111,9 @@ def sum_engine_powers(engines):
     return combined
 
 
-def plot_power_vs_rpm(df, title=""):
+def plot_power_vs_rpm(df, title="", opacity=1):
     fig, ax = plt.subplots(dpi=512, figsize=(6.51, 3.93)) 
-    ax.plot(df["ave_rpm"], df["total_power"], 'o', markersize=0.5, color="blue")
+    ax.plot(df["ave_rpm"], df["total_power"], 'o', markersize=0.5, color="blue", alpha=opacity)
     cols = engine_curves.columns[1:]
     for col in cols:
         plt.plot(engine_curves["RPM"], engine_curves[col], label="Engine Power "+str(col)+"%")
@@ -130,10 +131,10 @@ def plot_power_vs_rpm(df, title=""):
     fig.savefig("Figures/"+title+"power_vs_rpm.png")
 
 
-def plot_power_vs_sog(df, title=""):
+def plot_power_vs_sog(df, title="", opacity=1):
     fig, ax = plt.subplots(dpi=512, figsize=(6.51, 3.93))
     
-    ax.plot(df["speedoverground"], df["total_power"], 'o', markersize=0.5, color="blue")
+    ax.plot(df["speedoverground"], df["total_power"], 'o', markersize=0.5, color="blue", alpha=opacity)
 
     cols = engine_curves.columns[1:]
     for col in cols:
@@ -308,7 +309,7 @@ def plot_charge_time_vs_energy(df):
     ax1.grid()
     ax1.legend(loc="upper right")
     fig.tight_layout()
-    fig.savefig("Figures/energy_used_vs_charge_time (trips).svh")
+    fig.savefig("Figures/energy_used_vs_charge_time (trips).svg")
 
 
 def plot_energy_used_vs_time_to_charge(df):
@@ -559,6 +560,83 @@ def plot_monthly_power_vs_rpm_and_sog(df):
         plot_power_vs_rpm(month, title=month.index[0].strftime("%Y-%m"))
         plot_power_vs_sog(month, title=month.index[0].strftime("%Y-%m"))
 
+
+def plot_boxplot(d, title="", xlabel="", ylabel=""):
+    
+    medianprops = dict(markeredgecolor='white',
+                       markerfacecolor='white')
+    
+    fig, ax = plt.subplots(dpi=512, figsize=(6.51, 2.93))
+    sns.set_style("whitegrid")
+    
+    sns.boxplot(ax=ax, data=list(d.values()), whis=(0,100), zorder=3)
+    
+    ax.set_xticklabels(d.keys())
+    ax.set_ylim(bottom=0)
+    ax.grid(zorder=-1)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    plt.tight_layout()
+    if title:
+        title += "_"
+    plt.savefig("Figures/" + title + "boxplot.svg")
+
+
+def hourly_boxplot(df):
+    mask = df["total_power"]>0
+    hours = df[mask]["total_power"].groupby(df[mask].index.hour)
+    
+    d = dict(list(hours))
+    for i in np.arange(0, 24):
+        if i not in d.keys():
+            d[i] = []
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[i] = d[i]
+
+    plot_boxplot(temp, title="hourly", xlabel="Hour of the day", ylabel="Total Power [kW]")
+
+
+def daily_boxplot(df):
+    mask = df["total_power"]>0
+    hours = df[mask]["total_power"].groupby(df[mask].index.dayofweek)
+    
+    d = dict(list(hours))
+    for i in np.arange(0, 7):
+        if i not in d.keys():
+            d[i] = []
+
+    lookup = {0: "Mon",
+              1: "Tue",
+              2: "Wed",
+              3: "Thu",
+              4: "Fri",
+              5: "Sat",
+              6: "Sun"}
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[lookup[i]] = d[i]
+
+    plot_boxplot(temp, title="daily", xlabel="Day of the week", ylabel="Total Power [kW]")
+
+
+def monthly_boxplot(df):
+    mask = df["total_power"]>0
+    hours = df[mask]["total_power"].groupby(df[mask].index.month)
+    
+    d = dict(list(hours))
+    for i in np.arange(2, 7):
+        if i not in d.keys():
+            d[i] = []
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[datetime.datetime(year=2021, month=i, day=1).strftime("%b")] = d[i]
+
+    plot_boxplot(temp, title="monthly", xlabel="Month of the year", ylabel="Total Power [kW]")
+
 # file = "Data\engine_data_2021-02.csv"
 # data_1, engines_1 = read_csv(file)
 # file = "Data\engine_data_2021-03.csv"
@@ -570,9 +648,12 @@ def plot_monthly_power_vs_rpm_and_sog(df):
 data, engines = read_csv(csv_files)
 
 combined = sum_engine_powers(engines)
-plot_power_vs_rpm(combined, title="all_data")
-plot_power_vs_sog(combined, title="all_data")
+plot_power_vs_rpm(combined, title="all_data", opacity=0.05)
+plot_power_vs_sog(combined, title="all_data", opacity=0.05)
 plot_monthly_power_vs_rpm_and_sog(combined)
+hourly_boxplot(combined)
+daily_boxplot(combined)
+monthly_boxplot(combined)
 days = split_days(combined)
 
 # histogram_data = calc_histogram_engine_data()
