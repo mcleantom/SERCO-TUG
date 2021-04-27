@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.ticker
 import datetime
 from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
@@ -157,8 +158,8 @@ def plot_day(df):
     
     start = df.index[0].to_pydatetime().date()
     end = start# + datetime.timedelta(days=1)
-    start = datetime.datetime(start.year, start.month, start.day, 6)
-    end = datetime.datetime(end.year, end.month, end.day, 20)
+    start = datetime.datetime(start.year, start.month, start.day, df.index.min().hour)
+    end = datetime.datetime(end.year, end.month, end.day, df.index.max().hour + 1)
     fig, ax1 = plt.subplots(dpi=512, figsize=(6.48, 2.95))
     
     ax1.set_ylabel("Total Power [kW], RPM")
@@ -179,13 +180,17 @@ def plot_day(df):
     df[df["speedoverground"]>0]["speedoverground"].plot(ax=ax2, x_compat=True, color="red", label="SOG", linewidth=0.8)
     
     ax2.legend(loc="upper right")
-    
+    # l = ax1.get_ylim()
+    # l2 = ax2.get_ylim()
+    # f = lambda x : l2[0]+(x-l[0])/(l[1]-l[0])*(l2[1]-l2[0])
+    # ticks = f(ax1.get_yticks())
+    # ax2.yaxis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
     ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     
     ax1.set_xlabel("Hour of the day [hrs]")
-    ax1.set_ylim(left=0)#(0, 2500])
-    ax2.set_ylim(left=0)#[0, 10])
+    ax1.set_ylim(bottom=0, top=2500)#(0, 2500])
+    ax2.set_ylim(bottom=0, top=10)#[0, 10])
 
 
 def split_trips(df):
