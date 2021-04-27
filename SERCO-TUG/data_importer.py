@@ -14,6 +14,7 @@ from scipy.interpolate import interp1d
 from openpyxl.styles import Alignment
 import calendar
 import seaborn as sns
+import plotly_express as px
 
 # =============================================================================
 # INPUTS
@@ -119,7 +120,7 @@ def plot_power_vs_rpm(df, title="", opacity=1):
         plt.plot(engine_curves["RPM"], engine_curves[col], label="Engine Power "+str(col)+"%")
    
 
-    ax.set_xlim(left=600)#(600, 1600)
+    ax.set_xlim(left=600, right=1800)#(600, 1600)
     ax.set_ylim(bottom=0)#0, 2500)
     ax.set_xlabel("Engine RPM")
     ax.set_ylabel("Total Power [kW]")
@@ -138,9 +139,9 @@ def plot_power_vs_sog(df, title="", opacity=1):
 
     cols = engine_curves.columns[1:]
     for col in cols:
-        ax.plot([0, 7], [engine_curves[col][0]]*2, label="Engine Power "+str(col)+"%")
+        ax.plot([0, np.ceil(df["speedoverground"].max())], [engine_curves[col][0]]*2, label="Engine Power "+str(col)+"%")
 
-    ax.set_xlim(left=0)#(0, 7)
+    ax.set_xlim(left=0, right=np.ceil(df["speedoverground"].max()))#(0, 7)
     ax.set_ylim(bottom=0)#(0, 2500)
     ax.set_xlabel("SOG [kts]")
     ax.set_ylabel("Total Power [kW]")
@@ -522,7 +523,7 @@ def calc_histogram_engine_data(df, title="count"):
 
 def plot_histogram_engine_data(df):
     n, bins = np.histogram(df["total_power"], bins=[5,100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100,2200,2300,2400])
-    width = np.diff(bins)
+    # width = np.diff(bins)
     bins = [str(x) for x in bins]
     bins = [x[0]+"-"+x[1] for x in zip(bins[:-1], bins[1:])]
     n = n/60
@@ -532,7 +533,7 @@ def plot_histogram_engine_data(df):
     # ax.xaxis.set_minor_locator(AutoMinorLocator())
     rects = ax.bar(bins, n, zorder=3)
     ax.tick_params(axis='x', rotation=90)
-    # ax.set_ylim(0, 900)
+    ax.set_ylim(0, 1800)
     for rect in rects:
         height = rect.get_height()
         ax.text(rect.get_x() + rect.get_width()/2., height+10,
@@ -566,13 +567,36 @@ def plot_boxplot(d, title="", xlabel="", ylabel=""):
     medianprops = dict(markeredgecolor='white',
                        markerfacecolor='white')
     
-    fig, ax = plt.subplots(dpi=512, figsize=(6.51, 2.93))
-    sns.set_style("whitegrid")
     
-    sns.boxplot(ax=ax, data=list(d.values()), whis=(0,100), zorder=3)
+    fig, ax = plt.subplots(dpi=512, figsize=(6.51, 2.93))
+    # sns.set_style("whitegrid")
+    
+    sns.boxplot(ax=ax, data=list(d.values()), zorder=3, whis=(0,100))
     
     ax.set_xticklabels(d.keys())
-    ax.set_ylim(bottom=0)
+    ax.set_ylim(bottom=0, top=1800)
+    ax.grid(zorder=-1)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    plt.tight_layout()
+    if title:
+        title += "_"
+    plt.savefig("Figures/" + title + "boxplot.svg")
+
+
+def plot_barplot(d, title="", xlabel="", ylabel=""):
+    
+    medianprops = dict(markeredgecolor='white',
+                       markerfacecolor='white')
+    
+    
+    fig, ax = plt.subplots(dpi=512, figsize=(6.51, 2.93))
+    # sns.set_style("whitegrid")
+    
+    sns.barplot(ax=ax, data=list(d.values()), zorder=3, ci=None, color="skyblue")
+    
+    ax.set_xticklabels(d.keys())
+    ax.set_ylim(bottom=0, top=500)
     ax.grid(zorder=-1)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -583,7 +607,7 @@ def plot_boxplot(d, title="", xlabel="", ylabel=""):
 
 
 def hourly_boxplot(df):
-    mask = df["total_power"]>0
+    mask = df["total_power"]>5
     hours = df[mask]["total_power"].groupby(df[mask].index.hour)
     
     d = dict(list(hours))
@@ -594,12 +618,42 @@ def hourly_boxplot(df):
     temp = {}
     for i in sorted(d.keys()):
         temp[i] = d[i]
-
+    
     plot_boxplot(temp, title="hourly", xlabel="Hour of the day", ylabel="Total Power [kW]")
+    
+    return temp
+
+
+def hourly_barplot(df):
+    mask = df["total_power"]>5
+    hours = df[mask]["total_power"].groupby(df[mask].index.hour)
+    
+    d = dict(list(hours))
+    for i in np.arange(0, 24):
+        if i not in d.keys():
+            d[i] = []
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[i] = d[i]
+    
+    plot_barplot(temp, title="hourly", xlabel="Hour of the day", ylabel="Mean Power [kW]")
+    
+    return temp
+
+
+def calc_means(d):
+    temp = {}
+    for i in d:
+        if len(d[i])>0:
+            temp[i] = np.mean(d[i])
+        else:
+            temp[i] = 0
+    return temp
 
 
 def daily_boxplot(df):
-    mask = df["total_power"]>0
+    mask = df["total_power"]>5
     hours = df[mask]["total_power"].groupby(df[mask].index.dayofweek)
     
     d = dict(list(hours))
@@ -622,8 +676,32 @@ def daily_boxplot(df):
     plot_boxplot(temp, title="daily", xlabel="Day of the week", ylabel="Total Power [kW]")
 
 
+def daily_barplot(df):
+    mask = df["total_power"]>5
+    hours = df[mask]["total_power"].groupby(df[mask].index.dayofweek)
+    
+    d = dict(list(hours))
+    for i in np.arange(0, 7):
+        if i not in d.keys():
+            d[i] = []
+
+    lookup = {0: "Mon",
+              1: "Tue",
+              2: "Wed",
+              3: "Thu",
+              4: "Fri",
+              5: "Sat",
+              6: "Sun"}
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[lookup[i]] = d[i]
+
+    plot_barplot(temp, title="daily", xlabel="Day of the week", ylabel="Mean Power [kW]")
+
+
 def monthly_boxplot(df):
-    mask = df["total_power"]>0
+    mask = df["total_power"]>5
     hours = df[mask]["total_power"].groupby(df[mask].index.month)
     
     d = dict(list(hours))
@@ -637,6 +715,38 @@ def monthly_boxplot(df):
 
     plot_boxplot(temp, title="monthly", xlabel="Month of the year", ylabel="Total Power [kW]")
 
+
+def monthly_barplot(df):
+    mask = df["total_power"]>5
+    hours = df[mask]["total_power"].groupby(df[mask].index.month)
+    
+    d = dict(list(hours))
+    for i in np.arange(2, 7):
+        if i not in d.keys():
+            d[i] = []
+
+    temp = {}
+    for i in sorted(d.keys()):
+        temp[datetime.datetime(year=2021, month=i, day=1).strftime("%b")] = d[i]
+
+    plot_barplot(temp, title="monthly", xlabel="Month of the year", ylabel="Mean Power [kW]")
+
+
+def summarise_trip_data(df):
+    cols = ["duration", "time_to_charge", "energy_used", "fuel_at_power", "total_fuel", "energy_used"]
+    lookup = ["Duration [hr]", "Time to charge [hr]", "Energy used [kWh]", "Fuel at power [liter]", "Total fuel [liter]", "Energy used [kWh]"]
+    # cols = ['duration', 'energy_used', 'total_fuel',
+    #         'fuel_at_power', 'fuel_idle', 'duration_at_power', 'duration_idle',
+    #         'time_to_charge']
+    # lookup = ["Duration [hr]", "Energy used [kWh]", "Total fuel [liter]", "Fuel at power [liter]", "Fuel idle [liter]", "Duration at power [hr]", "Duration idle [hr]", "Time To Charge [hr]"]
+    fig, ax = plt.subplots(nrows=1, ncols=len(cols), figsize=(6.51, 3.95), dpi=512, constrained_layout=True)
+    for i, col in enumerate(cols):
+        sns.boxplot(ax=ax[i], data=df[col], whis=(0,100), color='skyblue')
+        ax[i].set_xticklabels([lookup[i]], rotation=90)
+    # ax.set_xticklabels(["Duration", "Energy used", "Total fuel", "Fuel at power", "Fuel idle", "Duration at power", "Duration idle", "Time To Charge"]
+        # ax[i].srt_xticklabels(ax.get_ticklabels(), rotation=90)
+    
+    
 # file = "Data\engine_data_2021-02.csv"
 # data_1, engines_1 = read_csv(file)
 # file = "Data\engine_data_2021-03.csv"
@@ -651,9 +761,9 @@ combined = sum_engine_powers(engines)
 plot_power_vs_rpm(combined, title="all_data", opacity=0.05)
 plot_power_vs_sog(combined, title="all_data", opacity=0.05)
 plot_monthly_power_vs_rpm_and_sog(combined)
-hourly_boxplot(combined)
-daily_boxplot(combined)
-monthly_boxplot(combined)
+hourly_barplot(combined)
+daily_barplot(combined)
+monthly_barplot(combined)
 days = split_days(combined)
 
 # histogram_data = calc_histogram_engine_data()
