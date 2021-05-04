@@ -23,7 +23,8 @@ import plotly_express as px
 
 engine_curves = pd.read_excel("Data/engine_curve.xlsx")
 csv_files = ["Data\engine_data_2021-02.csv",
-             "Data\engine_data_2021-03.csv"]
+             "Data\engine_data_2021-03.csv",
+             "Data\engine_data_2021_04.csv"]
 
 # =============================================================================
 # CODE
@@ -45,7 +46,7 @@ def read_csv(filepaths):
     df["dataloggertime"] = pd.to_datetime(df["dataloggertime"])
     df = df.sort_values(by=["dataloggertime"])
     df = df.set_index(["dataloggertime"])
-    
+    df.index = df.index.tz_convert('GB')
     engines = split_engines(df)
     for i in engines:
         engines[i] = calc_torque(engines[i])
@@ -155,7 +156,8 @@ def plot_power_vs_sog(df, title="", opacity=1):
 
 
 def plot_day(df):
-    
+    df = df.copy()
+    df.index = df.index.tz_convert('GB').tz_localize(None)
     start = df.index[0].to_pydatetime().date()
     end = start# + datetime.timedelta(days=1)
     start = datetime.datetime(start.year, start.month, start.day, df.index.min().hour)
@@ -194,7 +196,7 @@ def plot_day(df):
 
 
 def split_trips(df):
-    g = (df.index.to_series().diff().dt.seconds > 1).cumsum()
+    g = (df.index.to_series().diff().dt.seconds > 10*60).cumsum()
     trips = dict(tuple(df.groupby(g)))
     for trip in trips:
         trips[trip] = trips[trip][trips[trip]["imei"].notna()]
@@ -261,7 +263,8 @@ def analyse_trips(df):
             results["Trip " + str(i)] = trip_result
             
     results = pd.DataFrame.from_dict(results).T
-    results["time_to_charge"] = (results["start_time"] - results["stop_time"].shift(1)).fillna(pd.Timedelta(seconds=0))
+    results.index = ["".join(["Trip ", str(x+1)]) for x in range(len(results))]
+    # results["time_to_charge"] = (results["start_time"] - results["stop_time"].shift(1)).fillna(pd.Timedelta(seconds=0))
     # charge_time = results["time_to_charge"]/datetime.timedelta(hours=1)
     # days, hours = divmod(charge_time, 24)
     # results["altered_time_to_charge"] = 24*(days>0) + hours
@@ -343,7 +346,9 @@ def formatted_table(df):
 
 
 def calc_time_to_charge(df):
-    
+    df = df.copy()
+    df["start_time"] = df["start_time"].dt.tz_convert('UTC')
+    df["stop_time"] = df["stop_time"].dt.tz_convert('UTC')
     start = df["start_time"]
     stop = df["stop_time"]
     
@@ -434,6 +439,7 @@ def plot_days(df):
     for week, grp in wrk.groupby('week'):
         fig, ax = plt.subplots(figsize=(6.48, 2.95), dpi=512)
         grp.iloc[:, :2].plot.bar(ax=ax, stacked=True, color=["tab:orange", "tab:grey"])
+
 
 def plot_weeks(df):
     df = df.copy()
@@ -598,7 +604,7 @@ def plot_barplot(d, title="", xlabel="", ylabel=""):
     fig, ax = plt.subplots(dpi=512, figsize=(6.51, 2.93))
     # sns.set_style("whitegrid")
     
-    sns.barplot(ax=ax, data=list(d.values()), zorder=3, ci=None, color="skyblue")
+    sns.barplot(ax=ax, data=list(d.values()), zorder=3, ci=None, color="blue")
     
     ax.set_xticklabels(d.keys())
     ax.set_ylim(bottom=0, top=500)
@@ -630,6 +636,8 @@ def hourly_boxplot(df):
 
 
 def hourly_barplot(df):
+    df = df.copy()
+    # df.index = df.index.tz_convert('GMT').tz_localize(None)
     mask = df["total_power"]>5
     hours = df[mask]["total_power"].groupby(df[mask].index.hour)
     
